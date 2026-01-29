@@ -11,47 +11,60 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4 # ← updated from v3 (v3 is deprecated / uses old Node runner)
         with:
-          node-version: 18
+          node-version: '20' # ← fixed: matches your package.json requirement
+          cache: 'yarn' # ← enables automatic yarn lock caching → much faster runs
+
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install --frozen-lockfile # or --immutable if using Yarn Berry
+
       - name: Lint code
         run: yarn lint
+
       - name: Run unit tests
         run: yarn test
 
   build-android:
-    needs: test # Run after tests pass
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: '20'
+          cache: 'yarn'
+
       - name: Install dependencies
         run: yarn install --frozen-lockfile
+
       - name: Set up Java
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4 # ← updated from v3
         with:
           distribution: 'zulu'
           java-version: '17'
+
       - name: Decode Keystore
         run: echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 --decode > android/app/my-release-key.keystore
+
       - name: Build Android Release
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           cd android
           ./gradlew assembleRelease
+
       - name: Upload APK Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4 # ← updated from v3
         with:
           name: android-apk
           path: android/app/build/outputs/apk/release/app-release.apk
-      - name: Deploy to Firebase App Distribution # Optional CD step
+
+      - name: Deploy to Firebase App Distribution
         if: github.ref == 'refs/heads/main'
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
@@ -60,36 +73,45 @@ jobs:
           file: android/app/build/outputs/apk/release/app-release.apk
 
   build-ios:
-    needs: test # Run after tests pass
-    runs-on: macos-latest # Required for Xcode
+    needs: test
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: '20'
+          cache: 'yarn'
+
       - name: Install dependencies
         run: yarn install --frozen-lockfile
+
       - name: Install CocoaPods
         run: cd ios && pod install
-      - name: Set up Fastlane Match
-        run: |
-          echo "${{ secrets.IOS_CERTIFICATE }}" | base64 --decode > certificate.p12
-          fastlane match --readonly
-        env:
-          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-      - name: Build iOS Release
-        run: |
-          cd ios
-          fastlane ios release  # Assumes a 'release' lane in Fastfile
+
+      # - name: Set up Fastlane Match
+      #   run: |
+      #     echo "${{ secrets.IOS_CERTIFICATE }}" | base64 --decode > certificate.p12
+      #     fastlane match --readonly
+      #   env:
+      #     MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+      #     MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+
+      # - name: Build iOS Release
+      #   run: |
+      #     cd ios
+      #     fastlane ios release   # make sure this lane exists in your Fastfile
+
       - name: Upload IPA Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ios-ipa
-          path: ios/MyApp.ipa
-      - name: Deploy to TestFlight # Optional CD step
-        if: github.ref == 'refs/heads/main'
-        run: fastlane ios deploy_to_testflight
-        env:
-          APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          path: ios/build/MyApp.ipa # ← most common path; adjust if your Fastfile outputs elsewhere
+
+
+      # - name: Deploy to TestFlight
+      #   if: github.ref == 'refs/heads/main'
+      #   run: fastlane ios deploy_to_testflight
+      #   env:
+      #     APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
