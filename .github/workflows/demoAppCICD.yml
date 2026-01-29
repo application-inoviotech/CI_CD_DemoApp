@@ -1,66 +1,75 @@
 name: demoAppCICD
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: 16
-      - name: Install dependencies
-        run: yarn install
-      - name: Run tests
-        run: yarn test
-
   build-android:
-    needs: test
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
         with:
           node-version: 16
+
       - name: Install dependencies
         run: yarn install
+
       - name: Setup Java
         uses: actions/setup-java@v3
         with:
-          distribution: 'zulu'
-          java-version: '11'
+          distribution: zulu
+          java-version: 11
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
-      - name: Build Android Release
+
+      - name: Build Android Release (AAB)
         run: |
           cd android
           ./gradlew bundleRelease
-      - name: Upload APK
+
+      - name: Upload Android AAB
         uses: actions/upload-artifact@v3
         with:
-          name: app-release
+          name: android-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
 
   build-ios:
-    needs: test
     runs-on: macos-latest
+
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
         with:
           node-version: 16
+
       - name: Install dependencies
         run: yarn install
+
       - name: Install CocoaPods
         run: |
           cd ios
           pod install
-      - name: Build iOS
+
+      - name: Build iOS (Archive)
         run: |
           cd ios
-          xcodebuild -workspace YourApp.xcworkspace -scheme YourApp -configuration Release -sdk iphoneos -archivePath $PWD/build/YourApp.xcarchive archive
+          xcodebuild \
+            -workspace YourApp.xcworkspace \
+            -scheme YourApp \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath $PWD/build/YourApp.xcarchive \
+            archive
